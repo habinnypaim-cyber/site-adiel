@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AtividadesIA - Gerador de Atividades Educacionais</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .activity-sheet {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 15mm;
+            margin: 1rem auto;
+            border: 1px #D1D5DB solid;
+            background-color: white;
+            box-shadow: 0 0 0.5cm rgba(0,0,0,0.5);
+            color: #000;
+        }
+        @media print {
+            body, .activity-sheet {
+                margin: 0;
+                box-shadow: none;
+                border: none;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex items-center justify-center min-h-screen">
+
+    <!-- Tela de Login -->
+    <div id="login-page" class="w-full max-w-md p-8 space-y-6 bg-gray-800 rounded-lg shadow-lg">
+        <div class="text-center">
+            <h1 class="text-3xl font-bold text-cyan-400">AtividadesIA</h1>
+            <p class="text-gray-400">Seu assistente para criar atividades incríveis.</p>
+        </div>
+        <div id="login-error" class="hidden text-red-400 bg-red-900/50 p-3 rounded-md text-center"></div>
+        <div class="space-y-4">
+            <div>
+                <label for="username" class="sr-only">Login</label>
+                <input type="text" id="username" placeholder="Login" class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500">
+            </div>
+            <div>
+                <label for="password" class="sr-only">Senha</label>
+                <input type="password" id="password" placeholder="Senha" class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500">
+            </div>
+        </div>
+        <div class="space-y-3">
+            <button onclick="handleLogin()" class="w-full px-4 py-2 font-bold text-white bg-cyan-600 rounded-md hover:bg-cyan-700 transition-colors">Entrar</button>
+            <button onclick="handleSocioLogin()" class="w-full px-4 py-2 font-bold text-cyan-400 bg-gray-700 border border-cyan-500 rounded-md hover:bg-gray-600 transition-colors">Acesso Sócio</button>
+        </div>
+        <p class="text-center text-sm text-gray-500">Para testar, use o login gratuito: <br><strong>Login:</strong> usuario / <strong>Senha:</strong> 40</p>
+    </div>
+
+    <!-- Tela Principal do Gerador -->
+    <div id="generator-page" class="hidden w-full max-w-4xl p-8 space-y-8 bg-gray-800 rounded-lg shadow-lg">
+        <header class="flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-cyan-400">Gerador de Atividades</h1>
+            <button onclick="handleLogout()" class="text-sm text-gray-400 hover:text-white">Sair</button>
+        </header>
+        <div class="text-center">
+            <p id="user-mode-indicator" class="text-yellow-400 bg-yellow-900/50 inline-block px-4 py-1 rounded-full text-sm"></p>
+        </div>
+        <div>
+            <label for="prompt" class="block mb-2 text-lg font-medium text-gray-300">Descreva a atividade que você deseja criar:</label>
+            <textarea id="prompt" rows="4" class="w-full p-4 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="Ex: Crie uma atividade sobre animais da fazenda para crianças de 6 anos, com questões de múltipla escolha e de ligar os pontos."></textarea>
+            <div class="text-sm text-gray-500 mt-2">
+                <p>Experimente:</p>
+                <div class="flex flex-wrap gap-2 mt-1">
+                    <button onclick="setPromptExample(this)" class="bg-gray-700 hover:bg-gray-600 text-xs px-3 py-1 rounded-full">Exercícios de matemática básica</button>
+                    <button onclick="setPromptExample(this)" class="bg-gray-700 hover:bg-gray-600 text-xs px-3 py-1 rounded-full">Alfabetização para 5 anos</button>
+                    <button onclick="setPromptExample(this)" class="bg-gray-700 hover:bg-gray-600 text-xs px-3 py-1 rounded-full">Atividades de colorir sobre o sistema solar</button>
+                </div>
+            </div>
+        </div>
+        <button onclick="handleGenerate()" id="generate-button" class="w-full px-6 py-3 font-bold text-lg text-white bg-cyan-600 rounded-md hover:bg-cyan-700 transition-colors flex items-center justify-center gap-2">
+            Gerar Atividade
+        </button>
+    </div>
+
+    <!-- Tela de Carregamento -->
+    <div id="loading-page" class="hidden text-center space-y-4">
+        <div class="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-cyan-500 mx-auto"></div>
+        <h2 class="text-2xl font-semibold">Gerando sua atividade...</h2>
+        <p id="loading-status" class="text-gray-400">Isso pode levar alguns minutos. Estamos criando as imagens e questões com IA.</p>
+    </div>
+
+    <!-- Tela de Resultado / Atividade -->
+    <div id="activity-page" class="hidden w-full max-w-5xl">
+        <div class="text-center mb-6">
+            <h2 class="text-3xl font-bold">Sua Atividade está Pronta!</h2>
+            <p class="text-gray-400">Revise abaixo e clique para baixar o PDF.</p>
+            <button onclick="downloadPDF()" class="mt-4 px-6 py-2 font-bold text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors">Baixar em PDF</button>
+        </div>
+        <div id="activity-sheet-container">
+            <!-- O conteúdo da atividade será injetado aqui -->
+        </div>
+    </div>
+   
+    <!-- Tela de Planos / Paywall -->
+    <div id="plans-page" class="hidden w-full max-w-2xl p-8 text-center bg-gray-800 rounded-lg shadow-lg">
+        <h2 class="text-3xl font-bold text-cyan-400">Limite Gratuito Atingido</h2>
+        <p class="mt-4 text-gray-300">Você já utilizou sua geração de atividade gratuita. Para continuar criando atividades incríveis e ilimitadas, escolha um de nossos planos.</p>
+        <div class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="p-6 bg-gray-700 rounded-lg border border-gray-600">
+                <h3 class="text-xl font-bold">Plano Mensal</h3>
+                <p class="mt-2 text-4xl font-bold">R$29<span class="text-base font-normal text-gray-400">/mês</span></p>
+                <ul class="mt-4 text-left space-y-2 text-gray-400">
+                    <li>✅ Gerações Ilimitadas</li>
+                    <li>✅ Acesso a todos os modelos</li>
+                    <li>✅ Suporte Prioritário</li>
+                </ul>
+                <button class="w-full mt-6 px-4 py-2 font-bold text-white bg-cyan-600 rounded-md hover:bg-cyan-700 transition-colors">Assinar Agora</button>
+            </div>
+            <div class="p-6 bg-gray-700 rounded-lg border-2 border-cyan-500">
+                 <span class="bg-cyan-500 text-white text-xs font-bold px-3 py-1 rounded-full absolute -mt-10 ml-20">MAIS POPULAR</span>
+                <h3 class="text-xl font-bold">Plano Anual</h3>
+                <p class="mt-2 text-4xl font-bold">R$299<span class="text-base font-normal text-gray-400">/ano</span></p>
+                <ul class="mt-4 text-left space-y-2 text-gray-400">
+                    <li>✅ Gerações Ilimitadas</li>
+                    <li>✅ Acesso a todos os modelos</li>
+                    <li>✅ Suporte Prioritário</li>
+                    <li>✅ 2 Meses Grátis</li>
+                </ul>
+                <button class="w-full mt-6 px-4 py-2 font-bold text-white bg-cyan-600 rounded-md hover:bg-cyan-700 transition-colors">Assinar Agora</button>
+            </div>
+        </div>
+         <button onclick="handleLogout()" class="mt-8 text-sm text-gray-400 hover:text-white">Voltar para o Login</button>
+    </div>
+
+    <script>
+        // Simulação de "ambiente de backend" para chaves e estado
+        const GEMINI_API_KEY = "AIzaSyCTyytB6bRxvG0Y9UDQeUyNU2KSpsN6-98"; // Chave fornecida pelo usuário
+        const apiKey = ""; // Chave real é injetada pelo ambiente, não usamos a de cima.
+
+        let currentUser = null;
+
+        // Função para alternar entre as telas da aplicação
+        function showPage(pageId) {
+            const pages = ['login-page', 'generator-page', 'loading-page', 'activity-page', 'plans-page'];
+            pages.forEach(page => {
+                document.getElementById(page).classList.add('hidden');
+            });
+            document.getElementById(pageId).classList.remove('hidden');
+        }
+
+        // --- LÓGICA DE AUTENTICAÇÃO ---
+        function handleLogin() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('login-error');
+
+            if (username === 'usuario' && password === '40') {
+                currentUser = { type: 'free', generations: 0 };
+                const savedGenerations = localStorage.getItem('freeUserGenerations');
+                if (savedGenerations) {
+                    currentUser.generations = parseInt(savedGenerations, 10);
+                }
+                updateUserModeIndicator();
+                showPage('generator-page');
+            } else if (username === 'socio' && password === 'x1') {
+                currentUser = { type: 'socio' };
+                updateUserModeIndicator();
+                showPage('generator-page');
+            } else {
+                errorDiv.textContent = 'Login ou senha inválidos.';
+                errorDiv.classList.remove('hidden');
+            }
+        }
+
+        function handleSocioLogin() {
+            document.getElementById('username').value = 'socio';
+            document.getElementById('password').value = 'x1';
+            handleLogin();
+        }
+
+        function handleLogout() {
+            currentUser = null;
+            showPage('login-page');
+        }
+       
+        function updateUserModeIndicator() {
+             const indicator = document.getElementById('user-mode-indicator');
+             if (currentUser.type === 'socio') {
+                 indicator.textContent = 'Modo Sócio - Gerações Ilimitadas';
+             } else {
+                 const remaining = 1 - currentUser.generations;
+                 indicator.textContent = `Modo Gratuito - ${remaining} geração restante`;
+             }
+        }
+
+        function setPromptExample(button) {
+            document.getElementById('prompt').value = button.textContent;
+        }
+
+        // --- LÓGICA DE GERAÇÃO DE ATIVIDADE ---
+
+        async function handleGenerate() {
+            if (currentUser.type === 'free' && currentUser.generations >= 1) {
+                showPage('plans-page');
+                return;
+            }
+
+            const prompt = document.getElementById('prompt').value;
+            if (!prompt.trim()) {
+                alert('Por favor, descreva a atividade que deseja criar.');
+                return;
+            }
+           
+            showPage('loading-page');
+            document.getElementById('loading-status').textContent = 'Analisando seu pedido e criando o roteiro das questões...';
+
+            try {
+                // 1. Gerar o JSON com as 10 questões
+                const questionsData = await generateQuestions(prompt);
+
+                // 2. Gerar as imagens para cada questão
+                const activityContainer = document.createElement('div');
+                activityContainer.id = 'activity-sheet';
+                activityContainer.className = 'activity-sheet';
+               
+                let headerHTML = `
+                    <div class="space-y-2 border-b-2 border-gray-400 pb-4 mb-6">
+                        <p><strong>Nome da Escola:</strong> _________________________________________</p>
+                        <p><strong>Nome do Aluno:</strong> ___________________________________________</p>
+                        <div class="flex justify-between">
+                            <p><strong>Professor(a):</strong> _________________________</p>
+                            <p><strong>Data:</strong> ____/____/______</p>
+                        </div>
+                    </div>
+                `;
+                activityContainer.innerHTML = headerHTML;
+
+                for (let i = 0; i < questionsData.length; i++) {
+                    const item = questionsData[i];
+                    document.getElementById('loading-status').textContent = `Criando imagem para a questão ${i + 1} de 10...`;
+                   
+                    const imageUrl = await generateImage(item.image_prompt);
+                   
+                    const questionElement = document.createElement('div');
+                    questionElement.className = 'mb-6';
+                    questionElement.innerHTML = `
+                        <p class="font-bold mb-2">${i + 1}. ${item.question_text}</p>
+                        <img src="${imageUrl}" alt="Imagem para a questão ${i + 1}" class="my-2 rounded-md border border-gray-300 max-w-sm mx-auto">
+                        <div class="mt-2">${formatOptions(item)}</div>
+                    `;
+                    activityContainer.appendChild(questionElement);
+                }
+               
+                document.getElementById('activity-sheet-container').innerHTML = ''; // Limpa container
+                document.getElementById('activity-sheet-container').appendChild(activityContainer);
+
+
+                if (currentUser.type === 'free') {
+                    currentUser.generations++;
+                    localStorage.setItem('freeUserGenerations', currentUser.generations);
+                }
+
+                showPage('activity-page');
+
+            } catch (error) {
+                console.error('Error generating activity:', error);
+                alert('Ocorreu um erro ao gerar sua atividade. Verifique o console e tente novamente.');
+                updateUserModeIndicator();
+                showPage('generator-page');
+            }
+        }
+
+        function formatOptions(item) {
+            switch(item.question_type.toLowerCase()) {
+                case 'alternativas':
+                    return item.options.map(opt => `<div class="my-1"><span class="inline-block border border-gray-400 rounded w-6 h-6 mr-2"></span>${opt}</div>`).join('');
+                case 'ligue':
+                    const half = Math.ceil(item.options.length / 2);
+                    const col1 = item.options.slice(0, half);
+                    const col2 = item.options.slice(half);
+                    let table = '<div class="flex justify-around">';
+                    table += '<div>' + col1.map(c => `<div class="p-2 m-2 border border-gray-400 rounded">${c}</div>`).join('') + '</div>';
+                    table += '<div>' + col2.map(c => `<div class="p-2 m-2 border border-gray-400 rounded">${c}</div>`).join('') + '</div>';
+                    table += '</div>';
+                    return table;
+                case 'escrever':
+                    return '<div class="w-full h-24 border-t-2 border-b-2 border-dotted border-gray-400 mt-4"></div>';
+                case 'marcar x':
+                    return item.options.map(opt => `<div class="my-1"><span class="font-bold text-xl mr-2">( )</span>${opt}</div>`).join('');
+                default:
+                     return item.options.map(opt => `<div class="my-1"><span class="inline-block border border-gray-400 rounded w-6 h-6 mr-2"></span>${opt}</div>`).join('');
+            }
+        }
+
+        // --- CHAMADAS DE API ---
+
+        async function generateQuestions(userPrompt) {
+            const systemPrompt = `
+                Você é um especialista em pedagogia e criação de atividades para o ensino fundamental.
+                Sua tarefa é criar 10 questões baseadas no prompt do usuário.
+                Para cada questão, você deve fornecer:
+                1. "question_text": O texto da pergunta.
+                2. "image_prompt": Uma descrição detalhada para uma IA de imagem gerar uma imagem estilo cartoon, fofa e educativa que ilustre a questão. A descrição deve ser em inglês. Ex: "A cute cartoon smiling sun next to a happy cartoon moon".
+                3. "question_type": O tipo de questão. Escolha um entre: 'alternativas', 'ligue', 'escrever', 'marcar x'.
+                4. "options": Uma lista de strings para as opções. Para 'escrever', retorne uma lista vazia. Para 'ligue', forneça uma lista de itens a serem conectados (ex: ["Maçã", "Vaca", "Vermelho", "Leite"]). Para 'alternativas' ou 'marcar x', forneça as opções.
+
+                Responda APENAS com um array JSON válido, nada mais.
+                Exemplo de formato de saída:
+                [
+                    {
+                        "question_text": "Qual animal faz 'Miau'?",
+                        "image_prompt": "A cute cartoon cat, smiling, simple lines, colorful, for kids.",
+                        "question_type": "alternativas",
+                        "options": ["Cachorro", "Gato", "Pato", "Vaca"]
+                    }
+                ]
+            `;
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: [{ parts: [{ text: userPrompt }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: { responseMimeType: "application/json" }
+            };
+
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+           
+            const result = await response.json();
+            const jsonText = result.candidates[0].content.parts[0].text;
+            return JSON.parse(jsonText);
+        }
+
+        async function generateImage(imagePrompt) {
+             const payload = {
+                instances: [{ prompt: `${imagePrompt}, cute cartoon for kids, simple illustration, vibrant colors, clean background` }],
+                parameters: { "sampleCount": 1 }
+            };
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
+
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+           
+            const result = await response.json();
+            if (result.predictions && result.predictions[0].bytesBase64Encoded) {
+                return `data:image/png;base64,${result.predictions[0].bytesBase64Encoded}`;
+            }
+            throw new Error('Image generation failed, no image data in response.');
+        }
+
+        // --- LÓGICA DE PDF ---
+        async function downloadPDF() {
+            const sheet = document.getElementById('activity-sheet');
+            const button = event.target;
+            button.textContent = 'Preparando PDF...';
+            button.disabled = true;
+
+            try {
+                const canvas = await html2canvas(sheet, {
+                    scale: 2, // Aumenta a resolução da imagem
+                    useCORS: true
+                });
+               
+                const imgData = canvas.toDataURL('image/png');
+               
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+               
+                const imgProps = pdf.getImageProperties(imgData);
+                const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+                let heightLeft = imgHeight;
+                let position = 0;
+               
+                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+                heightLeft -= pdfHeight;
+
+                while (heightLeft > 0) {
+                    position = heightLeft - imgHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+                    heightLeft -= pdfHeight;
+                }
+               
+                pdf.save('atividade-gerada-ia.pdf');
+
+            } catch (error) {
+                console.error("Error generating PDF:", error);
+                alert("Não foi possível gerar o PDF. Tente novamente.");
+            } finally {
+                button.textContent = 'Baixar em PDF';
+                button.disabled = false;
+            }
+        }
+       
+        // Inicializa a aplicação
+        showPage('login-page');
+
+    </script>
+</body>
+</html>
